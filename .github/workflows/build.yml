@@ -1,0 +1,31 @@
+name: Build EXE
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install PyInstaller
+      run: |
+        pip install pyinstaller
+
+    - name: Build EXE (one-folder)
+      run: |
+        pyinstaller --add-data "bin;bin" --icon bin/icon.ico image_geotagger.py
+
+    - name: Upload folder as zip
+      uses: actions/upload-artifact@v3
+      with:
+        name: image_geotagger_build
+        path: dist/image_geotagger

@@ -4,6 +4,7 @@ from tkinter import ttk
 import subprocess
 import os
 import sys
+import shutil
 import re
 from pathlib import Path
 import ctypes
@@ -16,21 +17,27 @@ try:
 except:
     pass
 
-def get_exiftool_path():
-    #Check if exiftool is included in build, dev or PATH
-    
-    # If running as PyInstaller EXE
+def get_exiftool_path(filename="exiftool.exe"):
+    # 1. .exe mode
     if getattr(sys, "frozen", False):
-        # Look in bundled folder
-        return os.path.join(sys._MEIPASS, "bin", "exiftool.exe")
-    
-    # Dev environment: check local project folder first
-    local_path = os.path.join(os.path.dirname(__file__), "bin", "exiftool.exe")
-    if os.path.isfile(local_path):
-        return local_path
-    
-    # Fallback to system PATH
-    return "exiftool"
+        exe_dir = os.path.dirname(sys.executable)
+        exe_path = os.path.join(exe_dir, "bin", filename)
+        if os.path.isfile(exe_path):
+            return exe_path
+
+    # 2. Dev mode
+    script_dir = os.path.dirname(__file__)
+    dev_path = os.path.join(script_dir, "bin", filename)
+    if os.path.isfile(dev_path):
+        return dev_path
+
+    # 3. Fallback to PATH
+    path_path = shutil.which(filename)
+    if path_path:
+        return path_path
+
+    # If none found, return the default name (will likely fail)
+    return filename
 
 
 class ImageGeotagger:
@@ -39,6 +46,14 @@ class ImageGeotagger:
         self.root.title("Image Geotagger")
         self.root.geometry("750x600")
         self.root.resizable(True, True)
+
+        icon_path = get_exiftool_path("icon.ico")
+        if os.path.isfile(icon_path):
+            try:
+                self.root.iconbitmap(icon_path)
+            except Exception as e:
+                # print(f"Failed to set window icon: {e}")
+                ()
 
         self.selected_paths = []
         self.image_extensions = {
