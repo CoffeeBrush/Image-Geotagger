@@ -1,5 +1,6 @@
 name: Build Release EXE
 
+# Trigger this workflow when a new release is created
 on:
   release:
     types: [created]
@@ -9,29 +10,45 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      # Get the repo code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      # Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  # Match your Python version
+          python-version: '3.11'
 
+      # Install PyInstaller
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Build EXE
+      # Build the EXE (one-folder, windowed, with icon)
+      - name: Build Image Geotagger EXE
         run: |
-          pyinstaller --name "Image Geotagger" --windowed --icon bin/icon.ico --add-data "bin;bin" image_geotagger.pyw
+          pyinstaller --name "Image Geotagger" --windowed --icon bin/icon.ico image_geotagger.pyw
 
-      - name: Zip dist folder
+      # Copy the bin folder manually into the dist folder
+      - name: Copy bin folder
+        run: |
+          xcopy /E /I /Y bin "%CD%\dist\Image Geotagger\bin"
+
+      # Remove _internal folder if it exists
+      - name: Remove _internal folder
+        run: |
+          if exist "%CD%\dist\Image Geotagger\_internal" rmdir /S /Q "%CD%\dist\Image Geotagger\_internal"
+
+      # Zip the Image Geotagger folder (ready for release)
+      - name: Zip Image Geotagger folder
         run: |
           cd dist
           powershell Compress-Archive -Path "Image Geotagger/*" -DestinationPath "Image_Geotagger.zip"
 
-      - name: Upload to release
+      # Upload the ZIP to the GitHub release
+      - name: Upload ZIP to GitHub release
         uses: softprops/action-gh-release@v1
         with:
           files: dist/Image_Geotagger.zip
