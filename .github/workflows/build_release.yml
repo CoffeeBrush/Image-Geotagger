@@ -1,0 +1,39 @@
+name: Build Release EXE
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'  # Match your Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller --name "Image Geotagger" --windowed --icon bin/icon.ico --add-data "bin;bin" image_geotagger.pyw
+
+      - name: Zip dist folder
+        run: |
+          cd dist
+          powershell Compress-Archive -Path "Image Geotagger/*" -DestinationPath "Image_Geotagger.zip"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/Image_Geotagger.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
