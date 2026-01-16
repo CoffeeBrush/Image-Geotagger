@@ -2,7 +2,7 @@ name: Build Release EXE
 
 on:
   release:
-    types: [created]
+    types: [published, created]
 
 jobs:
   build:
@@ -22,6 +22,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
 
+      - name: Clean old build and dist folders
+        run: |
+          if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+          if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+
       - name: Build Image Geotagger EXE
         run: |
           pyinstaller --name "Image Geotagger" --windowed --icon bin/icon.ico image_geotagger.pyw
@@ -37,16 +42,17 @@ jobs:
               Remove-Item -Path $internalPath -Recurse -Force
           }
 
-      - name: Zip Image Geotagger folder
+      - name: Zip Image Geotagger folder with release tag
         run: |
+          $releaseTag = "${{ github.event.release.tag_name }}"
           $source = "dist\Image Geotagger"
-          $destination = "dist\Image_Geotagger.zip"
+          $destination = "dist\Image_Geotagger_$releaseTag.zip"
           if (Test-Path $destination) { Remove-Item $destination }
           Compress-Archive -Path "$source\*" -DestinationPath $destination
 
       - name: Upload ZIP to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/Image_Geotagger.zip
+          files: dist/Image_Geotagger_${{ github.event.release.tag_name }}.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
