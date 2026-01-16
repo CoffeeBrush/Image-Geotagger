@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox
 from tkinter import ttk
 import subprocess
 import os
+import sys
 import re
 from pathlib import Path
 import ctypes
@@ -14,6 +15,22 @@ try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except:
     pass
+
+def get_exiftool_path():
+    #Check if exiftool is included in build, dev or PATH
+    
+    # If running as PyInstaller EXE
+    if getattr(sys, "frozen", False):
+        # Look in bundled folder
+        return os.path.join(sys._MEIPASS, "bin", "exiftool.exe")
+    
+    # Dev environment: check local project folder first
+    local_path = os.path.join(os.path.dirname(__file__), "bin", "exiftool.exe")
+    if os.path.isfile(local_path):
+        return local_path
+    
+    # Fallback to system PATH
+    return "exiftool"
 
 
 class ImageGeotagger:
@@ -116,7 +133,7 @@ class ImageGeotagger:
 
     def check_exiftool(self):
         try:
-            subprocess.run(['exiftool', '-ver'], capture_output=True, check=True)
+            subprocess.run([get_exiftool_path(), "-ver"], capture_output=True, check=True)
             self.progress_text = "Ready - ExifTool detected"
             self.redraw_progress()
         except Exception:
@@ -192,7 +209,7 @@ class ImageGeotagger:
         lat_ref = 'S' if lat < 0 else 'N'
         lon_ref = 'W' if lon < 0 else 'E'
         return [
-            'exiftool',
+            'get_exiftool_path()',
             '-overwrite_original',
             '-P',
             '-progress',
