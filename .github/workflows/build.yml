@@ -1,4 +1,4 @@
-name: Build EXE
+name: Build Release EXE
 
 on:
   release:
@@ -9,23 +9,39 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Install PyInstaller
-      run: |
-        pip install pyinstaller
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
 
-    - name: Build EXE (one-folder)
-      run: |
-        pyinstaller --add-data "bin;bin" --icon bin/icon.ico image_geotagger.py
+      - name: Build EXE
+        run: |
+          pyinstaller --name "Image Geotagger" --windowed --icon bin/icon.ico image_geotagger.pyw
 
-    - name: Upload folder as zip
-      uses: actions/upload-artifact@v3
-      with:
-        name: image_geotagger_build
-        path: dist/image_geotagger
+      - name: Copy bin folder manually
+        run: |
+          xcopy /E /I /Y bin "%CD%\dist\Image Geotagger\bin"
+
+      - name: Remove _internal folder if it exists
+        run: |
+          if exist "%CD%\dist\Image Geotagger\_internal" rmdir /S /Q "%CD%\dist\Image Geotagger\_internal"
+
+      - name: Zip Image Geotagger folder
+        run: |
+          cd dist
+          powershell Compress-Archive -Path "Image Geotagger/*" -DestinationPath "Image_Geotagger.zip"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/Image_Geotagger.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
