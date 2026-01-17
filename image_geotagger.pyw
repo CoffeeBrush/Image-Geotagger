@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox, ttk
 import os
 import sys
 import shutil
+import subprocess
 from pathlib import Path
 import ctypes
 import threading
@@ -14,6 +15,8 @@ try:
 except Exception:
     pass
 
+# Helper to block exiftool cmd window
+CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 def get_exiftool_path(filename="exiftool.exe"):
     # 1. Frozen executable
@@ -139,12 +142,11 @@ class ImageGeotagger:
     # ---------------- Helpers ----------------
 
     def check_exiftool(self):
-        import subprocess
         try:
-            subprocess.run([self.exiftool_path, "-ver"],
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL,
-                           check=True)
+            subprocess.run([get_exiftool_path(), "-ver"],
+                capture_output=True,
+                check=True,
+                creationflags=CREATE_NO_WINDOW)
             self.progress_text = "Ready - ExifTool detected"
         except Exception:
             messagebox.showwarning(
@@ -291,7 +293,6 @@ class ImageGeotagger:
         self.processing_thread.start()
 
     def _geotag_thread_progress(self, lat, lon):
-        import subprocess
         import re
 
         if self.PROGRESS_REGEX is None:
