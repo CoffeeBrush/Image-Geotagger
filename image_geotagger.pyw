@@ -123,6 +123,17 @@ class ImageGeotagger:
         self.coord_entry.bind("<Button-3>", self.paste_from_clipboard)
         ttk.Button(coord_frame, text="Open Google Maps", command=self.open_google_maps).grid(row=0, column=2)
 
+        ttk.Label(
+            coord_frame,
+            text="Format: latitude, longitude",
+            font=('TkDefaultFont', 8, 'italic')).grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+
+        ttk.Label(
+            coord_frame,
+            text="Open Google Maps → Right-click a place → Click coordinates → Paste here",
+            font=('TkDefaultFont', 8)).grid(row=2, column=0, columnspan=3, sticky="w", pady=(2, 0))
+
+
         action_frame = ttk.Frame(main_frame)
         action_frame.grid(row=2, column=0, sticky="ew")
         action_frame.columnconfigure(0, weight=1)
