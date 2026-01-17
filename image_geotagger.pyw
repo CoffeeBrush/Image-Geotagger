@@ -72,7 +72,7 @@ class ImageGeotagger:
         self.setup_ui()
 
         # Delay ExifTool detection until UI is visible
-        self.root.after(200, self.check_exiftool)
+        self.root.after(100, self.check_exiftool)
         self.root.after(100, self.process_status_queue)
 
     # ---------------- UI ----------------

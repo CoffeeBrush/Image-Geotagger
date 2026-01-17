@@ -29,14 +29,9 @@ jobs:
           if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
           if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 
-      - name: Build one-file Image Geotagger EXE
+      - name: Build one-file Image Geotagger EXE from spec file
         run: |
-          pyinstaller `
-            --onefile `
-            --windowed `
-            --name "Image Geotagger" `
-            --icon bin/icon.ico `
-            image_geotagger.pyw
+          pyinstaller "Image Geotagger.spec"
 
       - name: Create release folder structure
         run: |
