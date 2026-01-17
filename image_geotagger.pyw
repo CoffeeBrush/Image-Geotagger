@@ -70,7 +70,7 @@ class ImageGeotagger:
 
         self.progress_value = 0
         self.progress_total = 1
-        self.progress_text = "Ready"
+        self.progress_text = "Loading"
 
         self.setup_ui()
 
@@ -158,7 +158,7 @@ class ImageGeotagger:
                 capture_output=True,
                 check=True,
                 creationflags=CREATE_NO_WINDOW)
-            self.progress_text = "Ready - ExifTool detected"
+            self.progress_text = "Ready"
         except Exception:
             messagebox.showwarning(
                 "ExifTool Not Found",
@@ -167,27 +167,39 @@ class ImageGeotagger:
             self.progress_text = "Warning: ExifTool not found"
         self.redraw_progress()
 
+    def add_to_queue(self, paths):
+        # Add new file paths to the selection without duplicates.
+        existing = set(self.selected_paths)
+        added = False
+
+        for p in paths:
+            if p not in existing:
+                self.selected_paths.append(p)
+                existing.add(p)
+                added = True
+
+        if added:
+            self.update_file_list()
+
     def select_images(self):
         files = filedialog.askopenfilenames(
             filetypes=[("Images", "*.jpg *.jpeg *.png *.tif *.tiff *.cr2 *.nef *.arw *.dng")]
         )
         if files:
-            self.selected_paths = list(files)
-            self.update_file_list()
+            self.add_to_queue(list(files))
 
     def select_folder(self):
         folder = filedialog.askdirectory()
         if not folder:
             return
         images = [
-            str(p) for p in Path(folder).iterdir()
+            str(p) for p in Path(folder).rglob("*")
             if p.is_file() and p.suffix.lower() in self.image_extensions
         ]
         if images:
-            self.selected_paths = images
-            self.update_file_list()
+            self.add_to_queue(images)
         else:
-            messagebox.showinfo("No Images Found", "No supported images found.")
+            messagebox.showinfo("No Images Found", "No supported images found in this folder or its subfolders.")
 
     def clear_selection(self):
         self.selected_paths = []
