@@ -70,7 +70,7 @@ class ImageGeotagger:
 
         self.progress_value = 0
         self.progress_total = 1
-        self.progress_text = "Ready"
+        self.progress_text = "Loading"
 
         self.setup_ui()
 
@@ -158,7 +158,7 @@ class ImageGeotagger:
                 capture_output=True,
                 check=True,
                 creationflags=CREATE_NO_WINDOW)
-            self.progress_text = "Ready - ExifTool detected"
+            self.progress_text = "Ready"
         except Exception:
             messagebox.showwarning(
                 "ExifTool Not Found",
