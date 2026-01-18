@@ -40,25 +40,17 @@ jobs:
         run: |
           Copy-Item -Path "bin" -Destination "dist\Image Geotagger\bin" -Recurse -Force
 
-      - name: Download signing tools
+      - name: Setup signing tools
         run: |
-          # Download the SignTool from Windows SDK
-          $sdkVersion = "10.0.22621.0"
-          $signtoolDir = "$env:RUNNER_TEMP\signtool"
-          New-Item -ItemType Directory -Path $signtoolDir -Force | Out-Null
-          
-          # Use NuGet to get the signing tools package
-          $nugetUrl = "https://www.nuget.org/api/v2/package/Microsoft.Windows.SDK.BuildTools/10.0.22000.282"
-          $zipPath = "$signtoolDir\sdk.zip"
-          try {
-            Invoke-WebRequest -Uri $nugetUrl -OutFile $zipPath
-          } catch {
-            # Fallback to alternative package
-            $nugetUrl = "https://www.nuget.org/api/v2/package/WindowsSDK.DesktopTools-x64/10.0.22621.756"
-            Invoke-WebRequest -Uri $nugetUrl -OutFile $zipPath
+          # Try to find signtool if already installed
+          $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
+          if ($signtool) {
+            Write-Host "signtool already found at: $($signtool.Source)"
+            exit 0
           }
           
-          Expand-Archive -Path $zipPath -DestinationPath $signtoolDir -Force
+          # Install Windows SDK with just the signing tools
+          choco install windows-sdk-10-version-22621 -y --no-progress
 
       - name: Code sign executable
         run: |
@@ -66,19 +58,32 @@ jobs:
           $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CODESIGN_PFX }}")
           [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
           
-          $signtoolDir = "$env:RUNNER_TEMP\signtool"
-          # Try multiple possible locations for signtool
+          # Find signtool
           $signtoolPaths = @(
-            "$signtoolDir\bin\10.0.22621.0\x64\signtool.exe",
-            "$signtoolDir\tools\signtool.exe",
-            "$signtoolDir\signtool.exe"
+            "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe",
+            "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe",
+            "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\signtool.exe"
           )
           
-          $signtoolPath = $signtoolPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $signtoolPath = $null
+          foreach ($path in $signtoolPaths) {
+            if (Test-Path $path) {
+              $signtoolPath = $path
+              Write-Host "Found signtool at: $path"
+              break
+            }
+          }
+          
           if (-not $signtoolPath) {
-            Write-Host "signtool.exe not found in any expected location"
-            Get-ChildItem -Path $signtoolDir -Recurse -Filter "signtool.exe" | ForEach-Object { Write-Host "Found: $_" }
-            throw "signtool.exe not found"
+            # Last resort: search the entire Program Files
+            $signtoolPath = Get-ChildItem -Path "C:\Program Files (x86)" -Recurse -Filter "signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+            if ($signtoolPath) {
+              Write-Host "Found signtool via search at: $signtoolPath"
+            }
+          }
+          
+          if (-not $signtoolPath) {
+            throw "signtool.exe not found anywhere on the system"
           }
           
           & $signtoolPath sign /f $pfxPath /p "${{ secrets.CODESIGN_PASSWORD }}" /t http://timestamp.sectigo.com "dist\Image Geotagger\Image Geotagger.exe"
