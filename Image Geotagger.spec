@@ -38,6 +38,7 @@ exe = EXE(
     upx=True,
     console=False,
     icon="bin/icon.ico",
+    version="version_info.txt"
 )
 
 coll = COLLECT(
