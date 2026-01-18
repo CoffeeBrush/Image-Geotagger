@@ -45,53 +45,72 @@ jobs:
           $toolsDir = "$env:RUNNER_TEMP\signtool_tools"
           New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
           
-          # Download nuget.exe
           $nugetUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
           $nugetPath = "$toolsDir\nuget.exe"
-          Write-Host "Downloading nuget.exe..."
           Invoke-WebRequest -Uri $nugetUrl -OutFile $nugetPath -UseBasicParsing
           
-          # Install the Windows SDK Build Tools package
-          Write-Host "Installing Microsoft.Windows.SDK.BuildTools 10.0.26100.7463..."
-          & $nugetPath install Microsoft.Windows.SDK.BuildTools -Version 10.0.26100.7463 -OutputDirectory "$toolsDir\packages" -NonInteractive
+          & $nugetPath install Microsoft.Windows.SDK.BuildTools `
+            -Version 10.0.26100.7463 `
+            -OutputDirectory "$toolsDir\packages" `
+            -NonInteractive
           
-          # Store the tools path for the next step
           Write-Output "SIGNTOOL_DIR=$toolsDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Code sign executable
+      - name: Code sign application EXE
         run: |
-          $toolsDir = $env:SIGNTOOL_DIR
-          
-          # Use the x64 signtool from the package
-          $signtoolPath = "$toolsDir\packages\Microsoft.Windows.SDK.BuildTools.10.0.26100.7463\bin\10.0.26100.0\x64\signtool.exe"
-          
+          $signtoolPath = "$env:SIGNTOOL_DIR\packages\Microsoft.Windows.SDK.BuildTools.10.0.26100.7463\bin\10.0.26100.0\x64\signtool.exe"
           if (-not (Test-Path $signtoolPath)) {
             throw "signtool.exe not found at: $signtoolPath"
           }
-          
-          Write-Host "Using signtool from: $signtoolPath"
-          
-          # Create PFX certificate
+
           $pfxPath = "$env:RUNNER_TEMP\cert.pfx"
-          $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CODESIGN_PFX }}")
-          [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-          
-          # Sign the executable
-          & $signtoolPath sign /fd SHA256 /f $pfxPath /p "${{ secrets.CODESIGN_PASSWORD }}" /t http://timestamp.sectigo.com "dist\Image Geotagger\Image Geotagger.exe"
-          
-          # Cleanup
+          $pfxBytes = [Convert]::FromBase64String("${{ secrets.CODESIGN_PFX }}")
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+
+          & $signtoolPath sign `
+            /fd SHA256 `
+            /f $pfxPath `
+            /p "${{ secrets.CODESIGN_PASSWORD }}" `
+            /t http://timestamp.sectigo.com `
+            "dist\Image Geotagger\Image Geotagger.exe"
+
           Remove-Item $pfxPath
 
-      - name: Create ZIP
-        run: |
-          $tag = "${{ github.event.release.tag_name }}"
-          $zip = "dist\Image_Geotagger_$tag.zip"
-          if (Test-Path $zip) { Remove-Item $zip }
-          Compress-Archive -Path "dist\Image Geotagger\*" -DestinationPath $zip
+      # ---------------- INSTALLER CREATION ----------------
 
-      - name: Upload ZIP to GitHub Release
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Build installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
+      - name: Sign installer
+        run: |
+          $signtoolPath = "$env:SIGNTOOL_DIR\packages\Microsoft.Windows.SDK.BuildTools.10.0.26100.7463\bin\10.0.26100.0\x64\signtool.exe"
+          if (-not (Test-Path $signtoolPath)) {
+            throw "signtool.exe not found at: $signtoolPath"
+          }
+
+          $pfxPath = "$env:RUNNER_TEMP\cert.pfx"
+          $pfxBytes = [Convert]::FromBase64String("${{ secrets.CODESIGN_PFX }}")
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+
+          & $signtoolPath sign `
+            /fd SHA256 `
+            /f $pfxPath `
+            /p "${{ secrets.CODESIGN_PASSWORD }}" `
+            /t http://timestamp.sectigo.com `
+            "installer\Image Geotagger Setup.exe"
+
+          Remove-Item $pfxPath
+
+      # ---------------- RELEASE ----------------
+
+      - name: Upload installer to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/Image_Geotagger_${{ github.event.release.tag_name }}.zip
+          files: "installer/Image Geotagger Setup.exe"
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
