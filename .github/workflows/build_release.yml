@@ -40,9 +40,13 @@ jobs:
         run: |
           Copy-Item -Path "bin" -Destination "dist\Image Geotagger\bin" -Recurse -Force
 
-      - name: Install Windows SDK
+      - name: Download signing tools
         run: |
-          choco install windows-sdk-10-version-2004-all -y
+          $nugetUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+          $nugetPath = "$env:RUNNER_TEMP\nuget.exe"
+          Invoke-WebRequest -Uri $nugetUrl -OutFile $nugetPath
+          
+          & $nugetPath install Microsoft.Windows.SDK.BuildTools -Version 10.0.22621.2 -OutputDirectory "$env:RUNNER_TEMP\sdk"
 
       - name: Code sign executable
         run: |
@@ -50,7 +54,7 @@ jobs:
           $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.CODESIGN_PFX }}")
           [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
           
-          $signtoolPath = "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe"
+          $signtoolPath = "$env:RUNNER_TEMP\sdk\Microsoft.Windows.SDK.BuildTools\bin\10.0.22621.0\x64\signtool.exe"
           & $signtoolPath sign /f $pfxPath /p "${{ secrets.CODESIGN_PASSWORD }}" /t http://timestamp.sectigo.com "dist\Image Geotagger\Image Geotagger.exe"
           
           Remove-Item $pfxPath
