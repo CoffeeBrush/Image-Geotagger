@@ -77,7 +77,7 @@ jobs:
           [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
           
           # Sign the executable
-          & $signtoolPath sign /f $pfxPath /p "${{ secrets.CODESIGN_PASSWORD }}" /t http://timestamp.sectigo.com "dist\Image Geotagger\Image Geotagger.exe"
+          & $signtoolPath sign /fd SHA256 /f $pfxPath /p "${{ secrets.CODESIGN_PASSWORD }}" /t http://timestamp.sectigo.com "dist\Image Geotagger\Image Geotagger.exe"
           
           # Cleanup
           Remove-Item $pfxPath
