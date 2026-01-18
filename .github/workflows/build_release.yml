@@ -51,31 +51,22 @@ jobs:
           Write-Host "Downloading nuget.exe..."
           Invoke-WebRequest -Uri $nugetUrl -OutFile $nugetPath -UseBasicParsing
           
-          # Install the Windows SDK tools package (this is a smaller, tools-only package)
-          Write-Host "Installing Windows SDK tools package..."
-          & $nugetPath install Microsoft.Windows.SDK.BuildTools -Version 10.0.19041.685 -OutputDirectory "$toolsDir\packages" -NonInteractive
-          
-          # List what was extracted so we can see the structure
-          Write-Host "Extracted files:"
-          Get-ChildItem -Path "$toolsDir\packages" -Recurse -Filter "signtool.exe" | ForEach-Object {
-            Write-Host "Found: $_"
-          }
+          # Install the Windows SDK Build Tools package
+          Write-Host "Installing Microsoft.Windows.SDK.BuildTools 10.0.26100.7463..."
+          & $nugetPath install Microsoft.Windows.SDK.BuildTools -Version 10.0.26100.7463 -OutputDirectory "$toolsDir\packages" -NonInteractive
           
           # Store the tools path for the next step
-          "$toolsDir" | Out-File -FilePath "$env:GITHUB_ENV" -Encoding utf8 -Append
           Write-Output "SIGNTOOL_DIR=$toolsDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Code sign executable
         run: |
           $toolsDir = $env:SIGNTOOL_DIR
           
-          # Find signtool.exe in the extracted package
-          $signtoolPath = Get-ChildItem -Path "$toolsDir\packages" -Recurse -Filter "signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          # Use the x64 signtool from the package
+          $signtoolPath = "$toolsDir\packages\Microsoft.Windows.SDK.BuildTools.10.0.26100.7463\bin\10.0.26100.0\x64\signtool.exe"
           
-          if (-not $signtoolPath) {
-            Write-Host "Available files in packages directory:"
-            Get-ChildItem -Path "$toolsDir\packages" -Recurse | ForEach-Object { Write-Host $_.FullName }
-            throw "signtool.exe not found in NuGet package"
+          if (-not (Test-Path $signtoolPath)) {
+            throw "signtool.exe not found at: $signtoolPath"
           }
           
           Write-Host "Using signtool from: $signtoolPath"
