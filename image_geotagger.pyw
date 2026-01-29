@@ -8,6 +8,7 @@ from pathlib import Path
 import ctypes
 import threading
 import queue
+import re
 
 # Fix DPI scaling/blurriness on Windows
 try:
@@ -15,24 +16,21 @@ try:
 except Exception:
     pass
 
-# Helper to block exiftool cmd window
 CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
+
 def get_exiftool_path(filename="exiftool.exe"):
-    # 1. Frozen executable
     if getattr(sys, "frozen", False):
         exe_dir = os.path.dirname(sys.executable)
         path = os.path.join(exe_dir, "bin", filename)
         if os.path.isfile(path):
             return path
 
-    # 2. Development mode
     script_dir = os.path.dirname(__file__)
     path = os.path.join(script_dir, "bin", filename)
     if os.path.isfile(path):
         return path
 
-    # 3. PATH fallback
     found = shutil.which(filename)
     if found:
         return found
@@ -40,16 +38,46 @@ def get_exiftool_path(filename="exiftool.exe"):
     return filename
 
 
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+
+    def show(self, _):
+        if self.tip:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + 20
+        self.tip = tk.Toplevel(self.widget)
+        self.tip.overrideredirect(True)
+        self.tip.geometry(f"+{x}+{y}")
+        ttk.Label(
+            self.tip,
+            text=self.text,
+            background="#ffffe0",
+            relief="solid",
+            borderwidth=1,
+            padding=6
+        ).pack()
+
+    def hide(self, _):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
+
+
 class ImageGeotagger:
-    PROGRESS_REGEX = None  # compiled lazily
+    PROGRESS_REGEX = None
 
     def __init__(self, root):
         self.root = root
         self.root.title("Image Geotagger")
-        self.root.geometry("750x600")
+        self.root.geometry("750x650")
         self.root.resizable(True, True)
 
-        # Resolve paths once
         self.exiftool_path = get_exiftool_path("exiftool.exe")
 
         icon_path = get_exiftool_path("icon.ico")
@@ -72,9 +100,23 @@ class ImageGeotagger:
         self.progress_total = 1
         self.progress_text = "Loading"
 
+        self.time_offset_var = tk.StringVar(value="+00:00")
+
+        self.timezone_offsets = {
+            "UTC": 0,
+            "GMT": 0,
+            "NZST": 12,
+            "NZDT": 13,
+            "AEST": 10,
+            "AEDT": 11,
+            "JST": 9,
+            "PST": -8,
+            "EST": -5,
+            "CET": 1
+        }
+
         self.setup_ui()
 
-        # Delay ExifTool detection until UI is visible
         self.root.after(100, self.check_exiftool)
         self.root.after(100, self.process_status_queue)
 
@@ -88,6 +130,7 @@ class ImageGeotagger:
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
 
+        # File selection
         file_frame = ttk.LabelFrame(main_frame, text="Select Images", padding="10")
         file_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         file_frame.columnconfigure(0, weight=1)
@@ -111,31 +154,65 @@ class ImageGeotagger:
                                     command=self.clear_selection, state=tk.DISABLED)
         self.clear_btn.grid(row=2, column=0, sticky="w", pady=(5, 0))
 
+        # Coordinates
         coord_frame = ttk.LabelFrame(main_frame, text="GPS Coordinates", padding="10")
         coord_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         coord_frame.columnconfigure(1, weight=1)
 
         ttk.Label(coord_frame, text="Coordinates:").grid(row=0, column=0, sticky="w")
         self.coord_var = tk.StringVar()
-        self.coord_var.trace_add("write", self.validate_coord_input)
         self.coord_entry = ttk.Entry(coord_frame, textvariable=self.coord_var)
         self.coord_entry.grid(row=0, column=1, sticky="ew", padx=(0, 10))
-        self.coord_entry.bind("<Button-3>", self.paste_from_clipboard)
         ttk.Button(coord_frame, text="Open Google Maps", command=self.open_google_maps).grid(row=0, column=2)
 
-        ttk.Label(
-            coord_frame,
-            text="Format: latitude, longitude",
-            font=('TkDefaultFont', 8, 'italic')).grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        ttk.Label(coord_frame, text="Format: latitude, longitude", font=('TkDefaultFont', 8, 'italic')) \
+            .grid(row=1, column=0, columnspan=3, sticky="w")
 
         ttk.Label(
             coord_frame,
-            text="Open Google Maps → Right-click a place → Click coordinates → Paste here",
-            font=('TkDefaultFont', 8)).grid(row=2, column=0, columnspan=3, sticky="w", pady=(2, 0))
+            text="Open Google Maps → Right-click → Click coordinates → Paste here",
+            font=('TkDefaultFont', 8)
+        ).grid(row=2, column=0, columnspan=3, sticky="w")
 
+        # Time correction
+        time_frame = ttk.LabelFrame(main_frame, text="Correct Image Time", padding="10")
+        time_frame.grid(row=2, column=0, sticky="ew", pady=(0, 10))
 
+        self.from_tz_var = tk.StringVar(value="UTC")
+        self.to_tz_var = tk.StringVar(value="UTC")
+
+        ttk.Label(time_frame, text="From:").grid(row=0, column=0)
+        self.from_tz_combo = ttk.Combobox(
+            time_frame, values=list(self.timezone_offsets.keys()),
+            textvariable=self.from_tz_var, state="readonly", width=8
+        )
+        self.from_tz_combo.grid(row=0, column=1)
+
+        ttk.Label(time_frame, text="To:").grid(row=0, column=2, padx=(10, 0))
+        self.to_tz_combo = ttk.Combobox(
+            time_frame, values=list(self.timezone_offsets.keys()),
+            textvariable=self.to_tz_var, state="readonly", width=8
+        )
+        self.to_tz_combo.grid(row=0, column=3)
+
+        ttk.Label(time_frame, text="Offset:").grid(row=0, column=4, padx=(10, 0))
+        self.offset_entry = ttk.Entry(time_frame, textvariable=self.time_offset_var, width=8)
+        self.offset_entry.grid(row=0, column=5)
+
+        ToolTip(
+            self.offset_entry,
+            "Time offset applied to all images.\n"
+            "Auto-calculated from timezones.\n"
+            "Editable for camera drift or DST fixes.\n\n"
+            "Format: +HH:MM or -HH:MM"
+        )
+
+        self.from_tz_combo.bind("<<ComboboxSelected>>", lambda e: self.update_time_offset())
+        self.to_tz_combo.bind("<<ComboboxSelected>>", lambda e: self.update_time_offset())
+
+        # Progress + actions
         action_frame = ttk.Frame(main_frame)
-        action_frame.grid(row=2, column=0, sticky="ew")
+        action_frame.grid(row=3, column=0, sticky="ew")
         action_frame.columnconfigure(0, weight=1)
 
         self.progress_canvas = tk.Canvas(action_frame, height=30, bg="white", highlightthickness=0)
@@ -144,11 +221,82 @@ class ImageGeotagger:
 
         btn_action_frame = ttk.Frame(action_frame)
         btn_action_frame.grid(row=1, column=0, sticky="e")
-        ttk.Button(btn_action_frame, text="Preview Command", command=self.preview_command).pack(side=tk.RIGHT, padx=5)
+
+        ttk.Button(btn_action_frame, text="Correct Image Time", command=self.correct_image_time) \
+            .pack(side=tk.RIGHT, padx=5)
+
         self.geotag_btn = ttk.Button(btn_action_frame, text="Geotag Images", command=self.geotag_images)
         self.geotag_btn.pack(side=tk.RIGHT, padx=5)
 
         self.redraw_progress()
+
+    # ---------------- Time helpers ----------------
+
+    def update_time_offset(self):
+        try:
+            delta = self.timezone_offsets[self.to_tz_var.get()] - self.timezone_offsets[self.from_tz_var.get()]
+            sign = "+" if delta >= 0 else "-"
+            self.time_offset_var.set(f"{sign}{abs(delta):02d}:00")
+        except Exception:
+            pass
+
+    def validate_offset(self):
+        return re.match(r"^[+-]\d{2}:\d{2}$", self.time_offset_var.get().strip())
+
+    # ---------------- ExifTool time correction ----------------
+
+    def correct_image_time(self):
+        if not self.selected_paths:
+            messagebox.showwarning("No Files", "Select images first.")
+            return
+
+        if not self.validate_offset():
+            messagebox.showerror(
+                "Invalid Offset",
+                "Offset must be in the format:\n\n+HH:MM or -HH:MM\n\nExample: +12:00"
+            )
+            return
+
+        offset = self.time_offset_var.get().strip()
+        files = tuple(self.selected_paths)
+
+        self.progress_value = 0
+        self.progress_total = len(files)
+        self.progress_text = "Processing 0/{}".format(self.progress_total)
+        self.redraw_progress()
+
+        threading.Thread(
+            target=self._time_correction_thread,
+            args=(offset, files),
+            daemon=True
+        ).start()
+
+    def _time_correction_thread(self, offset, files):
+        cmd = [
+            self.exiftool_path,
+            f"-AllDates+={offset}",
+            "-overwrite_original",
+            "-progress",
+            *files
+        ]
+
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                creationflags=CREATE_NO_WINDOW
+            )
+            for line in process.stdout:
+                m = re.search(r"\[(\d+)/(\d+)\]", line)
+                if m:
+                    self.status_queue.put(("PROGRESS", int(m.group(1)), int(m.group(2))))
+            process.wait()
+        except Exception:
+            pass
+
+        self.status_queue.put(("DONE", len(files), 0))
 
     # ---------------- Helpers ----------------
 
@@ -377,7 +525,7 @@ class ImageGeotagger:
                     messagebox.showinfo(
                         "Geotagging Complete",
                         f"Total files: {msg[1] + msg[2]}\n"
-                        f"Successfully geotagged: {msg[1]}\n"
+                        f"Successfully Processed: {msg[1]}\n"
                         f"Failed: {msg[2]}"
                     )
                     self.geotag_btn.config(state=tk.NORMAL)
