@@ -1,6 +1,8 @@
+#include "version_temp.txt"
+
 [Setup]
 AppName=Image Geotagger
-AppVersion=1.0
+AppVersion={#AppVersion}
 AppPublisher=Chris Stevenson
 AppPublisherURL=https://github.com/coffeebrush/Image-Geotagger
 AppSupportURL=https://github.com/coffeebrush/Image-Geotagger/issues
@@ -10,7 +12,7 @@ DefaultDirName={pf}\Chris Stevenson\Image Geotagger
 DefaultGroupName=Image Geotagger
 
 OutputDir=installer
-OutputBaseFilename="Image Geotagger Setup"
+OutputBaseFilename="Image_Geotagger_Setup"
 Compression=lzma
 SolidCompression=yes
 
