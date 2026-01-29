@@ -245,6 +245,29 @@ class ImageGeotagger:
 
     # ---------------- ExifTool time correction ----------------
 
+    def build_alldates_offset_arg(self, offset_str):
+
+        offset_str = offset_str.strip()
+
+        if not offset_str:
+            raise ValueError("Offset cannot be empty")
+
+        sign = offset_str[0]
+        if sign not in ("+", "-"):
+            raise ValueError("Offset must start with + or -")
+
+        value = offset_str[1:]
+
+        # Basic validation: H or H:MM
+        import re
+        if not re.match(r"^\d{1,2}(:\d{2})?$", value):
+            raise ValueError("Offset must be in the form +H, +H:MM, -H or -H:MM")
+
+        if sign == "+":
+            return f"-AllDates+={value}"
+        else:
+            return f"-AllDates-={value}"
+
     def correct_image_time(self):
         if not self.selected_paths:
             messagebox.showwarning("No Files", "Select images first.")
@@ -272,12 +295,20 @@ class ImageGeotagger:
         ).start()
 
     def _time_correction_thread(self, offset, files):
+        try:
+            offset_arg = self.build_alldates_offset_arg(offset)
+        except ValueError as e:
+            messagebox.showerror("Invalid Time Offset", str(e))
+            return
+
         cmd = [
             self.exiftool_path,
-            f"-AllDates+={offset}",
             "-overwrite_original",
+            "-P",
             "-progress",
-            *files
+            offset_arg,
+            "-FileModifyDate<AllDates",
+            *self.selected_paths,
         ]
 
         try:
