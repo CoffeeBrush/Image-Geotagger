@@ -103,16 +103,16 @@ class ImageGeotagger:
         self.time_offset_var = tk.StringVar(value="+00:00")
 
         self.timezone_offsets = {
-            "UTC": 0,
-            "GMT": 0,
-            "NZST": 12,
-            "NZDT": 13,
-            "AEST": 10,
-            "AEDT": 11,
-            "JST": 9,
-            "PST": -8,
-            "EST": -5,
-            "CET": 1
+            "UTC (+0)": 0,
+            "GMT (+0)": 0,
+            "NZST (+12)": 12,
+            "NZDT (+13)": 13,
+            "AEST (+10)": 10,
+            "AEDT (+11)": 11,
+            "JST (+9)": 9,
+            "PST (-8)": -8,
+            "EST (-5)": -5,
+            "CET (+1)": 1
         }
 
         self.setup_ui()
@@ -178,20 +178,20 @@ class ImageGeotagger:
         time_frame = ttk.LabelFrame(main_frame, text="Correct Image Time", padding="10")
         time_frame.grid(row=2, column=0, sticky="ew", pady=(0, 10))
 
-        self.from_tz_var = tk.StringVar(value="UTC")
-        self.to_tz_var = tk.StringVar(value="UTC")
+        self.from_tz_var = tk.StringVar(value="GMT (+0)")
+        self.to_tz_var = tk.StringVar(value="GMT (+0)")
 
         ttk.Label(time_frame, text="From:").grid(row=0, column=0)
         self.from_tz_combo = ttk.Combobox(
             time_frame, values=list(self.timezone_offsets.keys()),
-            textvariable=self.from_tz_var, state="readonly", width=8
+            textvariable=self.from_tz_var, state="readonly", width=10
         )
         self.from_tz_combo.grid(row=0, column=1)
 
         ttk.Label(time_frame, text="To:").grid(row=0, column=2, padx=(10, 0))
         self.to_tz_combo = ttk.Combobox(
             time_frame, values=list(self.timezone_offsets.keys()),
-            textvariable=self.to_tz_var, state="readonly", width=8
+            textvariable=self.to_tz_var, state="readonly", width=10
         )
         self.to_tz_combo.grid(row=0, column=3)
 
@@ -553,12 +553,6 @@ class ImageGeotagger:
                     self.progress_value = self.progress_total
                     self.progress_text = f"Complete: {msg[1]} succeeded, {msg[2]} failed"
                     self.redraw_progress()
-                    messagebox.showinfo(
-                        "Geotagging Complete",
-                        f"Total files: {msg[1] + msg[2]}\n"
-                        f"Successfully Processed: {msg[1]}\n"
-                        f"Failed: {msg[2]}"
-                    )
                     self.geotag_btn.config(state=tk.NORMAL)
         except queue.Empty:
             pass
