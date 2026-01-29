@@ -529,8 +529,6 @@ class ImageGeotagger:
                         f"Failed: {msg[2]}"
                     )
                     self.geotag_btn.config(state=tk.NORMAL)
-                    self.selected_paths = []
-                    self.update_file_list()
         except queue.Empty:
             pass
 
